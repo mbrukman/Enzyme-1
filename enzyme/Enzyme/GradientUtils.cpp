@@ -1860,7 +1860,7 @@ Value *GradientUtils::lookupM(Value *val, IRBuilder<> &BuilderM,
                 start = unwrapM(start0, v,
                                 /*available*/ ValueToValueMapTy(),
                                 UnwrapMode::AttemptFullUnwrapWithLookup);
-                l1.header->dump();
+                llvm::errs() << *l1.header << "\n";
                 std::set<Value *> todo = {start0};
                 while (todo.size()) {
                   Value *now = *todo.begin();
@@ -1951,8 +1951,8 @@ Value *GradientUtils::lookupM(Value *val, IRBuilder<> &BuilderM,
 
                 auto memcpyF = Intrinsic::getDeclaration(
                     newFunc->getParent(), Intrinsic::memcpy, tys);
-                memcpyF->dump();
-
+                llvm::errs() << *memcpyF << "\n";
+                
                 auto mem = cast<CallInst>(v.CreateCall(memcpyF, nargs));
                 // memset->addParamAttr(0, Attribute::getWithAlignment(Context,
                 // inst->getAlignment()));
