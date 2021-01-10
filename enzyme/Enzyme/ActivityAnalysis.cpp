@@ -157,6 +157,18 @@ bool ActivityAnalyzer::isFunctionArgumentConstant(CallInst *CI, Value *val) {
 
   Function *F = CI->getCalledFunction();
 
+#if LLVM_VERSION_MAJOR >= 11
+    if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledOperand()))
+#else
+    if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledValue()))
+#endif
+    {
+      if (castinst->isCast())
+        if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
+            F = fn;
+        }
+    }
+
   // Indirect function calls may actively use the argument
   if (F == nullptr)
     return false;
@@ -714,7 +726,21 @@ bool ActivityAnalyzer::isConstantValue(TypeResults &TR, Value *Val) {
           insertConstantsFrom(*UpHypothesis);
           return true;
         }
-        if (auto called = op->getCalledFunction()) {
+
+        Function* called = op->getCalledFunction();
+        
+        #if LLVM_VERSION_MAJOR >= 11
+            if (auto castinst = dyn_cast<ConstantExpr>(op->getCalledOperand()))
+        #else
+            if (auto castinst = dyn_cast<ConstantExpr>(op->getCalledValue()))
+        #endif
+            {
+              if (castinst->isCast())
+                if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
+                    called = fn;
+                }
+            }
+        if (called) {
           if (called->getName() == "free" || called->getName() == "_ZdlPv" ||
               called->getName() == "_ZdlPvm" || called->getName() == "munmap") {
             ConstantValues.insert(Val);
@@ -1228,7 +1254,19 @@ bool ActivityAnalyzer::isInstructionInactiveFromOrigin(TypeResults &TR,
     if (op->hasFnAttr("enzyme_inactive")) {
       return true;
     }
-    if (auto called = op->getCalledFunction()) {
+    Function* called = op->getCalledFunction();
+      #if LLVM_VERSION_MAJOR >= 11
+          if (auto castinst = dyn_cast<ConstantExpr>(op->getCalledOperand()))
+      #else
+          if (auto castinst = dyn_cast<ConstantExpr>(op->getCalledValue()))
+      #endif
+          {
+            if (castinst->isCast())
+              if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
+                  called = fn;
+              }
+          }
+    if (called) {
       if (called->getName() == "free" || called->getName() == "_ZdlPv" ||
           called->getName() == "_ZdlPvm" || called->getName() == "munmap") {
         return true;
