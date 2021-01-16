@@ -428,7 +428,7 @@ void TypeAnalyzer::updateAnalysis(Value *Val, TypeTree Data, Value *Origin) {
   }
 
   // Print the update being made, if requested
-  if (PrintType) {
+  if (PrintType && false) {
     llvm::errs() << "updating analysis of val: " << *Val
                  << " current: " << analysis[Val].str() << " new "
                  << Data.str();
@@ -455,8 +455,18 @@ void TypeAnalyzer::updateAnalysis(Value *Val, TypeTree Data, Value *Origin) {
 
   // Attempt to update the underlying analysis
   bool LegalOr = true;
+  auto prev = analysis[Val];
   bool Changed =
       analysis[Val].checkedOrIn(Data, /*PointerIntSame*/ false, LegalOr);
+
+    if (PrintType) {
+      llvm::errs() << "updating analysis of val: " << *Val
+                  << " current: " << prev.str() << " new "
+                  << Data.str();
+      if (Origin)
+        llvm::errs() << " from " << *Origin;
+      llvm::errs() << " Changed=" << Changed << " legal=" << LegalOr << "\n";
+    }
 
   if (!LegalOr) {
     if (direction != BOTH) {
@@ -466,7 +476,7 @@ void TypeAnalyzer::updateAnalysis(Value *Val, TypeTree Data, Value *Origin) {
     llvm::errs() << *fntypeinfo.Function->getParent() << "\n";
     llvm::errs() << *fntypeinfo.Function << "\n";
     dump();
-    llvm::errs() << "Illegal updateAnalysis prev:" << analysis[Val].str()
+    llvm::errs() << "Illegal updateAnalysis prev:" << prev.str()
                  << " new: " << Data.str() << "\n";
     llvm::errs() << "val: " << *Val;
     if (Origin)
@@ -477,6 +487,7 @@ void TypeAnalyzer::updateAnalysis(Value *Val, TypeTree Data, Value *Origin) {
   }
 
   if (Changed) {
+
     // Add val so it can explicitly propagate this new info, if able to
     if (Val != Origin)
       addToWorkList(Val);
