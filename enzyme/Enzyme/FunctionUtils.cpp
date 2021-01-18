@@ -801,6 +801,15 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
           if (F && F->getName() == "__enzyme_integer") {
             continue;
           }
+          if (F && F->getName() == "__enzyme_pointer") {
+            continue;
+          }
+          if (F && F->getName() == "__enzyme_float") {
+            continue;
+          }
+          if (F && F->getName() == "__enzyme_double") {
+            continue;
+          }
 
           if (llvm::isModOrRefSet(AA2.getModRefInfo(CI, Loc))) {
             llvm::errs() << " failed to inline global: " << g << " due to "
@@ -839,6 +848,15 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
                 continue;
               }
               if (F && F->getName() == "__enzyme_integer") {
+                continue;
+              }
+              if (F && F->getName() == "__enzyme_pointer") {
+                continue;
+              }
+              if (F && F->getName() == "__enzyme_float") {
+                continue;
+              }
+              if (F && F->getName() == "__enzyme_double") {
                 continue;
               }
               if (F && (F->getName().startswith("f90io") || F->getName() == "ftnio_fmt_write64" ||
