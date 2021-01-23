@@ -106,8 +106,9 @@ static cl::opt<bool>
 static cl::opt<bool> EnzymeInline("enzyme-inline", cl::init(false), cl::Hidden,
                                   cl::desc("Force inlining of autodiff"));
 
-static cl::opt<bool> EnzymeNoAlias("enzyme-noalias", cl::init(false), cl::Hidden,
-                                  cl::desc("Force noalias of autodiff"));
+static cl::opt<bool> EnzymeNoAlias("enzyme-noalias", cl::init(false),
+                                   cl::Hidden,
+                                   cl::desc("Force noalias of autodiff"));
 
 static cl::opt<bool> EnzymeLowerGlobals(
     "enzyme-lower-globals", cl::init(false), cl::Hidden,
@@ -122,17 +123,17 @@ static cl::opt<int>
 bool couldFunctionArgumentCapture(llvm::CallInst *CI, llvm::Value *val) {
   Function *F = CI->getCalledFunction();
 
-  #if LLVM_VERSION_MAJOR >= 11
-    if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledOperand()))
-  #else
-    if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledValue()))
-  #endif
-    {
-      if (castinst->isCast())
-        if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
-            F = fn;
-        }
-    }
+#if LLVM_VERSION_MAJOR >= 11
+  if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledOperand()))
+#else
+  if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledValue()))
+#endif
+  {
+    if (castinst->isCast())
+      if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
+        F = fn;
+      }
+  }
 
   if (F == nullptr)
     return true;
@@ -705,11 +706,11 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
                     Returns, "", nullptr);
   NewF->setAttributes(F->getAttributes());
   if (EnzymeNoAlias)
-  for (auto j = NewF->arg_begin(); j != NewF->arg_end(); j++) {
-    if (j->getType()->isPointerTy()) {
-      j->addAttr(Attribute::NoAlias);
+    for (auto j = NewF->arg_begin(); j != NewF->arg_end(); j++) {
+      if (j->getType()->isPointerTy()) {
+        j->addAttr(Attribute::NoAlias);
+      }
     }
-  }
 
   if (EnzymePreopt) {
     if (EnzymeInline) {
@@ -751,14 +752,14 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
     );
     AAResults AA2(TLI);
     AA2.addAAResult(BAA);
-    //TypeBasedAAResult TBAA();
-    //AA2.addAAResult(TBAA);
+    // TypeBasedAAResult TBAA();
+    // AA2.addAAResult(TBAA);
 
     for (auto &g : NewF->getParent()->globals()) {
       bool inF = false;
       {
       std::set<Constant *> seen;
-      std::deque<Constant *> todo = {(Constant*)&g};
+      std::deque<Constant *> todo = {(Constant *)&g};
       while (todo.size()) {
         auto GV = todo.front();
         todo.pop_front();
@@ -775,11 +776,10 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
           }
         }
       }
-      }
-      doneF:;
+    doneF:;
       if (inF) {
-        bool activeCall = false;  
-        bool hasWrite = false;  
+        bool activeCall = false;
+        bool hasWrite = false;
         MemoryLocation
 #if LLVM_VERSION_MAJOR >= 12
             Loc = MemoryLocation(&g, LocationSize::beforeOrAfterPointer());
@@ -808,11 +808,6 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
                     F->getName() == "__fd_sincos_1")) {
             continue;
           }
-          
-          if (F && (F->getName().startswith("f90io") || F->getName() == "ftnio_fmt_write64" ||
-                    F->getName() == "__mth_i_ipowi" || F->getName() == "f90_pausea")) {
-            continue;
-          }
           if (F && F->getName() == "__enzyme_integer") {
             continue;
           }
@@ -825,84 +820,97 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
           if (F && F->getName() == "__enzyme_double") {
             continue;
           }
-
+          if (F && (F->getName().startswith("f90io") ||
+                    F->getName() == "ftnio_fmt_write64" ||
+                    F->getName() == "__mth_i_ipowi" ||
+                    F->getName() == "f90_pausea")) {
+            continue;
+          }
           if (llvm::isModOrRefSet(AA2.getModRefInfo(CI, Loc))) {
             llvm::errs() << " failed to inline global: " << g << " due to "
                          << *CI << "\n";
             activeCall = true;
+            break;
           }
         }
 
         if (!activeCall) {
-        std::set<Value*> seen;
-        std::deque<Value*> todo = { (Value*)&g };
-        while(todo.size()) {
-          auto GV = todo.front();
-          todo.pop_front();
-          if (!seen.insert(GV).second) continue;
-          for (auto u : GV->users()) {
-            if (isa<Constant>(u) || isa<GetElementPtrInst>(u) || isa<CastInst>(u) || isa<LoadInst>(u)) {
-              todo.push_back(u);
+          std::set<Value *> seen;
+          std::deque<Value *> todo = {(Value *)&g};
+          while (todo.size()) {
+            auto GV = todo.front();
+            todo.pop_front();
+            if (!seen.insert(GV).second)
               continue;
-            }
-            
-            if (auto CI = dyn_cast<CallInst>(u)) {
-              Function* F = CI->getCalledFunction();
-              #if LLVM_VERSION_MAJOR >= 11
-                if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledOperand()))
-              #else
-                if (auto castinst = dyn_cast<ConstantExpr>(CI->getCalledValue()))
-              #endif
+            for (auto u : GV->users()) {
+              if (isa<Constant>(u) || isa<GetElementPtrInst>(u) ||
+                  isa<CastInst>(u) || isa<LoadInst>(u)) {
+                todo.push_back(u);
+                continue;
+              }
+
+              if (auto CI = dyn_cast<CallInst>(u)) {
+                Function *F = CI->getCalledFunction();
+#if LLVM_VERSION_MAJOR >= 11
+                if (auto castinst =
+                        dyn_cast<ConstantExpr>(CI->getCalledOperand()))
+#else
+                if (auto castinst =
+                        dyn_cast<ConstantExpr>(CI->getCalledValue()))
+#endif
                 {
                   if (castinst->isCast())
                     if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
-                        F = fn;
+                      F = fn;
                     }
                 }
-              if (F && (isMemFreeLibMFunction(F->getName()) || F->getName() == "__fd_sincos_1")) {
-                continue;
-              }
-              if (F && F->getName() == "__enzyme_integer") {
-                continue;
-              }
-              if (F && F->getName() == "__enzyme_pointer") {
-                continue;
-              }
-              if (F && F->getName() == "__enzyme_float") {
-                continue;
-              }
-              if (F && F->getName() == "__enzyme_double") {
-                continue;
-              }
-              if (F && (F->getName().startswith("f90io") || F->getName() == "ftnio_fmt_write64" ||
-                        F->getName() == "__mth_i_ipowi" || F->getName() == "f90_pausea")) {
-                continue;
+                if (F && (isMemFreeLibMFunction(F->getName()) ||
+                          F->getName() == "__fd_sincos_1")) {
+                  continue;
+                }
+                if (F && F->getName() == "__enzyme_integer") {
+                  continue;
+                }
+                if (F && F->getName() == "__enzyme_pointer") {
+                  continue;
+                }
+                if (F && F->getName() == "__enzyme_float") {
+                  continue;
+                }
+                if (F && F->getName() == "__enzyme_double") {
+                  continue;
+                }
+                if (F && (F->getName().startswith("f90io") ||
+                          F->getName() == "ftnio_fmt_write64" ||
+                          F->getName() == "__mth_i_ipowi" ||
+                          F->getName() == "f90_pausea")) {
+                  continue;
+                }
+
+                if (couldFunctionArgumentCapture(CI, GV)) {
+                  hasWrite = true;
+                  goto endCheck;
+                }
+
+                if (llvm::isModSet(AA2.getModRefInfo(CI, Loc))) {
+                  hasWrite = true;
+                  goto endCheck;
+                }
               }
 
-              if (couldFunctionArgumentCapture(CI, GV)) {
-                hasWrite = true;
-                goto endCheck;
-              }
-
-              if (llvm::isModSet(AA2.getModRefInfo(CI, Loc))) {
-                hasWrite = true;
-                goto endCheck;
-              }
-            }
-            
-            else if (auto I = dyn_cast<Instruction>(u)) {
-              if (llvm::isModSet(AA2.getModRefInfo(I, Loc))) {
-                hasWrite = true;
-                goto endCheck;
+              else if (auto I = dyn_cast<Instruction>(u)) {
+                if (llvm::isModSet(AA2.getModRefInfo(I, Loc))) {
+                  hasWrite = true;
+                  goto endCheck;
+                }
               }
 
 
             }
           }
         }
-        }
 
-        endCheck:;
+      endCheck:;
         if (!activeCall && hasWrite) {
           IRBuilder<> bb(&NewF->getEntryBlock(), NewF->getEntryBlock().begin());
           AllocaInst *antialloca = bb.CreateAlloca(
@@ -1017,6 +1025,7 @@ Function *preprocessForClone(Function *F, AAResults &AA, TargetLibraryInfo &TLI,
       }
     }
 
+    }
     PassManagerBuilder Builder;
     Builder.OptLevel = 2;
     legacy::FunctionPassManager PM(NewF->getParent());
