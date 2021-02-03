@@ -459,14 +459,13 @@ void TypeAnalyzer::updateAnalysis(Value *Val, TypeTree Data, Value *Origin) {
   bool Changed =
       analysis[Val].checkedOrIn(Data, /*PointerIntSame*/ false, LegalOr);
 
-    if (PrintType) {
-      llvm::errs() << "updating analysis of val: " << *Val
-                  << " current: " << prev.str() << " new "
-                  << Data.str();
-      if (Origin)
-        llvm::errs() << " from " << *Origin;
-      llvm::errs() << " Changed=" << Changed << " legal=" << LegalOr << "\n";
-    }
+  if (PrintType) {
+    llvm::errs() << "updating analysis of val: " << *Val
+                 << " current: " << prev.str() << " new " << Data.str();
+    if (Origin)
+      llvm::errs() << " from " << *Origin;
+    llvm::errs() << " Changed=" << Changed << " legal=" << LegalOr << "\n";
+  }
 
   if (!LegalOr) {
     if (direction != BOTH) {
@@ -562,47 +561,49 @@ void TypeAnalyzer::considerTBAA() {
     for (Instruction &I : BB) {
 
       if (CallInst *call = dyn_cast<CallInst>(&I)) {
-        Function* F = call->getCalledFunction();
-      #if LLVM_VERSION_MAJOR >= 11
+        Function *F = call->getCalledFunction();
+#if LLVM_VERSION_MAJOR >= 11
         if (auto castinst = dyn_cast<ConstantExpr>(call->getCalledOperand()))
-      #else
+#else
         if (auto castinst = dyn_cast<ConstantExpr>(call->getCalledValue()))
-      #endif
+#endif
         {
           if (castinst->isCast())
             if (auto fn = dyn_cast<Function>(castinst->getOperand(0))) {
-                F = fn;
+              F = fn;
             }
         }
-        if (F &&
-            F->getName() == "__enzyme_float") {
-          assert(call->getNumArgOperands() == 2);
+        if (F && F->getName() == "__enzyme_float") {
+          assert(call->getNumArgOperands() == 1 || call->getNumOperands() == 2);
           assert(call->getArgOperand(0)->getType()->isPointerTy());
-          assert(isa<ConstantInt>(call->getArgOperand(1)));
           TypeTree TT;
-          for (size_t i = 0;
-               i < cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
-               i += 4)
+          size_t num = 1;
+          if (call->getNumArgOperands() == 2) {
+            assert(isa<ConstantInt>(call->getArgOperand(1)));
+            num = cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
+          }
+          for (size_t i = 0; i < num; i += 4)
             TT.insert({(int)i}, Type::getFloatTy(call->getContext()));
           TT.insert({}, BaseType::Pointer);
           updateAnalysis(call->getOperand(0), TT.Only(-1), call);
         }
-        if (F &&
-            F->getName() == "__enzyme_double") {
-          assert(call->getNumArgOperands() == 2);
+        if (F && F->getName() == "__enzyme_double") {
+          assert(call->getNumArgOperands() == 1 || call->getNumOperands() == 2);
           assert(call->getArgOperand(0)->getType()->isPointerTy());
-          assert(isa<ConstantInt>(call->getArgOperand(1)));
           TypeTree TT;
-          for (size_t i = 0;
-               i < cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
-               i += 8)
+          size_t num = 1;
+          if (call->getNumArgOperands() == 2) {
+            assert(isa<ConstantInt>(call->getArgOperand(1)));
+            num = cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
+          }
+          for (size_t i = 0; i < num; i += 8)
             TT.insert({(int)i}, Type::getDoubleTy(call->getContext()));
           TT.insert({}, BaseType::Pointer);
           updateAnalysis(call->getOperand(0), TT.Only(-1), call);
         }
-        if (F &&
-            F->getName() == "__enzyme_integer") {
-          assert(call->getNumArgOperands() == 1 || call->getNumArgOperands() == 2);
+        if (F && F->getName() == "__enzyme_integer") {
+          assert(call->getNumArgOperands() == 1 ||
+                 call->getNumArgOperands() == 2);
           assert(call->getArgOperand(0)->getType()->isPointerTy());
           size_t num = 1;
           if (call->getNumArgOperands() == 2) {
@@ -610,21 +611,22 @@ void TypeAnalyzer::considerTBAA() {
             num = cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
           }
           TypeTree TT;
-          for (size_t i = 0;
-               i < num;
-               i++)
+          for (size_t i = 0; i < num; i++)
             TT.insert({(int)i}, BaseType::Integer);
           TT.insert({}, BaseType::Pointer);
           updateAnalysis(call->getOperand(0), TT.Only(-1), call);
         }
-        if (F &&
-            F->getName() == "__enzyme_pointer") {
-          assert(call->getNumArgOperands() == 2);
+        if (F && F->getName() == "__enzyme_pointer") {
+          assert(call->getNumArgOperands() == 1 ||
+                 call->getNumArgOperands() == 2);
           assert(call->getArgOperand(0)->getType()->isPointerTy());
-          assert(isa<ConstantInt>(call->getArgOperand(1)));
           TypeTree TT;
-          for (size_t i = 0;
-               i < cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
+          size_t num = 1;
+          if (call->getNumArgOperands() == 2) {
+            assert(isa<ConstantInt>(call->getArgOperand(1)));
+            num = cast<ConstantInt>(call->getArgOperand(1))->getLimitedValue();
+          }
+          for (size_t i = 0; i < num;
                i += ((DL.getPointerSizeInBits() + 7) / 8))
             TT.insert({(int)i}, BaseType::Pointer);
           TT.insert({}, BaseType::Pointer);
@@ -3067,13 +3069,14 @@ FnTypeInfo TypeAnalyzer::getCallInfo(CallInst &call, Function &fn) {
     }
     typeInfo.Arguments.insert(std::pair<Argument *, TypeTree>(&arg, dt));
     std::set<int64_t> bounded;
-    for(auto v :fntypeinfo.knownIntegralValues(call.getArgOperand(argnum), *DT,
-                                             intseen)) {
-      if (abs(v) > 100) continue;
+    for (auto v : fntypeinfo.knownIntegralValues(call.getArgOperand(argnum),
+                                                 *DT, intseen)) {
+      if (abs(v) > 100)
+        continue;
       bounded.insert(v);
     }
-    typeInfo.KnownValues.insert(std::pair<Argument *, std::set<int64_t>>(
-        &arg, bounded));
+    typeInfo.KnownValues.insert(
+        std::pair<Argument *, std::set<int64_t>>(&arg, bounded));
     ++argnum;
   }
 
@@ -3328,10 +3331,11 @@ FnTypeInfo TypeResults::getAnalyzedTypeInfo() {
   return res;
 }
 
-bool TypeResults::isBlockAnalyzed(llvm::BasicBlock* BB) {
+bool TypeResults::isBlockAnalyzed(llvm::BasicBlock *BB) {
   assert(analysis.analyzedFunctions.find(info) !=
          analysis.analyzedFunctions.end());
-  return analysis.analyzedFunctions.find(info)->second.notForAnalysis.count(BB) == 0;
+  return analysis.analyzedFunctions.find(info)->second.notForAnalysis.count(
+             BB) == 0;
 }
 
 FnTypeInfo TypeResults::getCallInfo(CallInst &CI, Function &fn) {

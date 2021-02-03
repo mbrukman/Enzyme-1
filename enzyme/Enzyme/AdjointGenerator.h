@@ -1375,12 +1375,10 @@ public:
   #if LLVM_VERSION_MAJOR >= 12
           getUnderlyingObject(MTI.getOperand(0)), 100);
   #else
-          GetUnderlyingObject(MTI.getOperand(0)), TR.info.Function->getParent()->getDataLayout(),
-                              100);
-  #endif
-      if (auto AI = dyn_cast<AllocaInst>(DstOrig)) {
-        if (!ATA.isValueActivelyStoredOrReturned(AI)) {
-          fdsfads
+          GetUnderlyingObject(MTI.getOperand(0)),
+  TR.info.Function->getParent()->getDataLayout(), 100); #endif if (auto AI =
+  dyn_cast<AllocaInst>(DstOrig)) { if (!ATA.isValueActivelyStoredOrReturned(AI))
+  { fdsfads
         }
       }
     }
